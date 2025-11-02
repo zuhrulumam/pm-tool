@@ -1,0 +1,177 @@
+project:
+  name: pm-tool
+  module: github.com/zuhrulumam/pm-tool
+  port: 8080
+
+database:
+  type: postgres
+  host: localhost
+  port: 8432
+  name: pm_tool
+
+features:
+  redis:
+    enabled: true
+    use_for: [caching, rate_limit]
+  queue:
+    enabled: false
+    type: rabbitmq
+    patterns: [job_queue]
+  telemetry:
+    enabled: true
+    provider: opentelemetry
+  oauth:
+    enabled: true
+
+tables:
+  # ==========================================
+  # AUTH SCHEMA - User Management
+  # ==========================================
+  
+  users:
+    columns:
+      - name: id
+        type: uuid
+        primary_key: true
+      - name: email
+        type: string
+        length: 255
+        unique: true
+        nullable: false
+        validation: email
+      - name: password_hash
+        type: string
+        length: 255
+        nullable: true  # Nullable because OAuth users don't need password
+      - name: name
+        type: string
+        length: 100
+        nullable: true
+      - name: google_id
+        type: string
+        length: 255
+        unique: true
+        nullable: true  # For OAuth Google
+      - name: avatar_url
+        type: string
+        length: 512
+        nullable: true
+      - name: email_verified
+        type: boolean
+        default: false
+      - name: is_active
+        type: boolean
+        default: true
+      - name: last_login_at
+        type: timestamp
+        nullable: true
+      - name: created_at
+        type: timestamp
+        nullable: false
+      - name: updated_at
+        type: timestamp
+        nullable: false
+    indexes:
+      - columns: [email]
+        unique: true
+      - columns: [google_id]
+        unique: true
+      - columns: [is_active]
+    schema: auth
+
+  # ==========================================
+  # APP SCHEMA - Core Application
+  # ==========================================
+  
+  projects:
+    columns:
+      - name: id
+        type: uuid
+        primary_key: true
+      - name: user_id
+        type: uuid
+        nullable: false
+      - name: name
+        type: string
+        length: 255
+        nullable: false
+      - name: description
+        type: text
+        nullable: true
+      - name: color
+        type: string
+        length: 7
+        default: "#3B82F6"  # Tailwind blue-500
+        nullable: true
+      - name: is_archived
+        type: boolean
+        default: false
+      - name: created_at
+        type: timestamp
+        nullable: false
+      - name: updated_at
+        type: timestamp
+        nullable: false
+    indexes:
+      - columns: [user_id]
+      - columns: [user_id, is_archived]
+      - columns: [created_at]
+    relations:
+      - name: user
+        type: belongs_to
+        foreign_key: user_id
+        references:
+          table: users
+          column: id
+          schema: auth
+        on_delete: CASCADE
+        on_update: CASCADE
+    schema: project
+
+  notes:
+    columns:
+      - name: id
+        type: uuid
+        primary_key: true
+      - name: project_id
+        type: uuid
+        nullable: false
+      - name: title
+        type: string
+        length: 255
+        nullable: false
+      - name: content
+        type: text
+        nullable: true
+      - name: content_type
+        type: enum
+        values: [text, audio_transcription]
+        default: text
+      - name: audio_url
+        type: string
+        length: 512
+        nullable: true  # For future audio-to-text feature
+      - name: is_pinned
+        type: boolean
+        default: false
+      - name: created_at
+        type: timestamp
+        nullable: false
+      - name: updated_at
+        type: timestamp
+        nullable: false
+    indexes:
+      - columns: [project_id]
+      - columns: [project_id, created_at]
+      - columns: [project_id, is_pinned]
+      - columns: [created_at]
+    relations:
+      - name: project
+        type: belongs_to
+        foreign_key: project_id
+        references:
+          table: projects
+          column: id
+        on_delete: CASCADE
+        on_update: CASCADE
+    schema: project
