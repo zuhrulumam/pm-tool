@@ -4,14 +4,14 @@ import "time"
 
 // Config holds all application configuration
 type Config struct {
-	App        AppConfig
-	Database   DatabaseConfig
-	Redis      RedisConfig
-	Telemetry  TelemetryConfig
-	JWT        JWTConfig
-	Log        LogConfig
-	CORS       CORSConfig
-	RateLimit  RateLimitConfig
+	App       AppConfig
+	Database  DatabaseConfig
+	Redis     RedisConfig
+	Telemetry TelemetryConfig
+	JWT       JWTConfig
+	Log       LogConfig
+	CORS      CORSConfig
+	RateLimit RateLimitConfig
 	Oauth     OAuthConfig
 }
 
@@ -56,7 +56,7 @@ type TelemetryConfig struct {
 // JWTConfig holds JWT configuration
 type JWTConfig struct {
 	Secret     string
-	Expiration string
+	Expiration time.Duration
 }
 
 // LogConfig holds logging configuration

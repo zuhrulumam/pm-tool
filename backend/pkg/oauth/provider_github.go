@@ -1,5 +1,4 @@
-
-	package oauthhelper
+package oauthhelper
 
 import (
 	"context"
@@ -130,4 +129,6 @@ func (gh *GitHubProvider) getUserEmail(ctx context.Context, client *http.Client)
 	return "", apperr.ValidationError("no verified email found for github user")
 }
 
-	
+func (gh *GitHubProvider) VerifyIDToken(ctx context.Context, idToken string) (UserInfo, error) {
+	return UserInfo{}, nil
+}

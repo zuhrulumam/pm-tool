@@ -24,6 +24,7 @@ type Dependencies struct {
 type Provider interface {
 	GetLoginURL(ctx context.Context, state string) string
 	GetUserInfo(ctx context.Context, code, state string) (UserInfo, error)
+	VerifyIDToken(ctx context.Context, idToken string) (UserInfo, error)
 }
 
 type Oauth struct {
@@ -67,3 +68,6 @@ func (o *Oauth) GetLoginUrl(ctx context.Context, req GetUserInfoReq) string {
 	return o.provider.GetLoginURL(ctx, req.State)
 }
 
+func (o *Oauth) VerifyIDToken(ctx context.Context, idToken string) (UserInfo, error) {
+	return o.provider.VerifyIDToken(ctx, idToken)
+}

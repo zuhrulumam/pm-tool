@@ -18,6 +18,8 @@ import (
 	"github.com/zuhrulumam/pm-tool/pkg/db"
 	apperr "github.com/zuhrulumam/pm-tool/pkg/errors"
 	"github.com/zuhrulumam/pm-tool/pkg/httpclient"
+	"github.com/zuhrulumam/pm-tool/pkg/middleware"
+	oauthhelper "github.com/zuhrulumam/pm-tool/pkg/oauth"
 	qbu "github.com/zuhrulumam/pm-tool/pkg/query_builder"
 	"github.com/zuhrulumam/pm-tool/pkg/transaction"
 )
@@ -29,6 +31,9 @@ type UserDomainItf interface {
 	Update(ctx context.Context, id string, user *entity.User) error
 	Delete(ctx context.Context, id string) error
 	Count(ctx context.Context, filters map[string]interface{}) (int64, error)
+	OAuthLoginWithCredential(ctx context.Context, credential string) (*entity.User, string, error)
+
+	GetGoogleLoginURL(ctx context.Context, state string) string
 }
 
 // UserDomain handles business logic for User
@@ -42,6 +47,7 @@ type userDomain struct {
 	tracer       trace.Tracer
 	schemaPrefix string
 	cfg          *config.Config
+	oauth        oauthhelper.Oauth
 }
 
 // NewUserDomain creates a new UserDomain instance with all dependencies
@@ -53,6 +59,7 @@ func NewUserDomain(
 	httpClient *httpclient.Client,
 	tracer trace.Tracer,
 	schemaPrefix string,
+	oauthelp oauthhelper.Oauth,
 ) UserDomainItf {
 	return &userDomain{
 		db:    db,
@@ -62,15 +69,13 @@ func NewUserDomain(
 		tracer:       tracer,
 		schemaPrefix: schemaPrefix,
 		cfg:          conf,
+		oauth:        oauthelp,
 	}
 }
 
 // tableName returns full table name with schema
 func (d *userDomain) tableName() string {
-	if d.schemaPrefix != "" {
-		return d.schemaPrefix + "users"
-	}
-	return "users"
+	return "auth.users"
 }
 
 // getExecutor returns appropriate executor based on context
@@ -188,6 +193,7 @@ func (d *userDomain) List(ctx context.Context, filters map[string]interface{}, p
 	if whereClause != "" {
 		listQuery = fmt.Sprintf("%s %s", listQuery, whereClause)
 	}
+
 	// Add pagination
 	offset := (page - 1) * pageSize
 	query := fmt.Sprintf("%s ORDER BY id DESC LIMIT ? OFFSET ?", listQuery)
@@ -195,6 +201,7 @@ func (d *userDomain) List(ctx context.Context, filters map[string]interface{}, p
 
 	var entities []*entity.User
 	if err := exec.SelectContext(ctx, &entities, query, args...); err != nil {
+		fmt.Println("sini gan")
 		return nil, 0, apperr.DatabaseError(err, "list users")
 	}
 
@@ -220,11 +227,6 @@ func (d *userDomain) Update(ctx context.Context, id string, user *entity.User) e
 	// 3. Check if unique fields changed
 	if existing.Email != user.Email {
 		if err := d.checkUniqueEmail(ctx, user.Email); err != nil {
-			return err // Already wrapped
-		}
-	}
-	if existing.GoogleId != user.GoogleId {
-		if err := d.checkUniqueGoogleId(ctx, *user.GoogleId); err != nil {
 			return err // Already wrapped
 		}
 	}
@@ -441,4 +443,71 @@ func (d *userDomain) cacheDeleteUniqueGoogleId(ctx context.Context, google_id st
 	key := fmt.Sprintf("auth.users:google_id:%v", google_id)
 
 	d.redis.Del(ctx, key)
+}
+
+func (d *userDomain) OAuthLoginWithCredential(ctx context.Context, credential string) (*entity.User, string, error) {
+	ctx, span := d.tracer.Start(ctx, "domain.User.OAuthLoginWithCredential")
+	defer span.End()
+
+	// Use the new VerifyIDToken method
+	userInfo, err := d.oauth.VerifyIDToken(ctx, credential)
+	if err != nil {
+		return nil, "", apperr.Propagate(err, apperr.CodeExternalAPI, "oauth verify token failed", 401)
+	}
+
+	// Get or create user
+	filters := map[string]interface{}{
+		"google_id": userInfo.ID,
+	}
+
+	users, total, err := d.List(ctx, filters, 1, 1)
+	if err != nil {
+		return nil, "", apperr.DatabaseError(err, "get user by google id")
+	}
+
+	now := time.Now()
+	var user *entity.User
+
+	if total == 0 || len(users) == 0 {
+		// Create new user
+		user = &entity.User{
+			Id:            uuid.NewString(),
+			Email:         userInfo.Email,
+			Name:          &userInfo.Name,
+			AvatarUrl:     &userInfo.Picture,
+			GoogleId:      &userInfo.ID,
+			EmailVerified: true, // Google tokens are always verified
+			IsActive:      true,
+			LastLoginAt:   &now,
+		}
+		if err := d.Create(ctx, user); err != nil {
+			return nil, "", err
+		}
+	} else {
+		// Update existing user
+		user = users[0]
+		user.Name = &userInfo.Name
+		user.AvatarUrl = &userInfo.Picture
+		user.Email = userInfo.Email
+		user.LastLoginAt = &now
+		user.EmailVerified = true
+		if err := d.Update(ctx, user.Id, user); err != nil {
+			fmt.Println("sini gan", err)
+			return nil, "", err
+		}
+	}
+
+	// Generate JWT
+	token, err := middleware.GenerateToken(user.Id, user.Email, d.cfg.JWT.Secret, d.cfg.JWT.Expiration)
+	if err != nil {
+		return nil, "", apperr.InternalError(err, "create jwt failed")
+	}
+
+	return user, token, nil
+}
+
+func (d *userDomain) GetGoogleLoginURL(ctx context.Context, state string) string {
+	return d.oauth.GetLoginUrl(ctx, oauthhelper.GetUserInfoReq{
+		State: state,
+	})
 }

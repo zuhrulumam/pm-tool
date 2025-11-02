@@ -27,14 +27,13 @@ const (
 
 	// ListUsers retrieves paginated users
 	ListUsersQuery = `SELECT 
-		id, id, email, password_hash, name, google_id, avatar_url, email_verified, is_active, last_login_at, created_at, updated_at 
+		id, email, password_hash, name, google_id, avatar_url, email_verified, is_active, last_login_at, created_at, updated_at 
 	FROM %s`
 
 	// CountUsers counts total users
 	CountUsersQuery = `SELECT COUNT(*) FROM %s`
-	
+
 	// CheckUniqueEmail checks if email already exists
-	CheckUniqueEmailQuery = `SELECT COUNT(*) FROM %s WHERE email = $1 `// CheckUniqueGoogleId checks if google_id already exists
+	CheckUniqueEmailQuery    = `SELECT COUNT(*) FROM %s WHERE email = $1 ` // CheckUniqueGoogleId checks if google_id already exists
 	CheckUniqueGoogleIdQuery = `SELECT COUNT(*) FROM %s WHERE google_id = $1 `
 )
-	

@@ -17,14 +17,14 @@ import (
 // NoteHandler handles HTTP requests for Note
 type NoteHandler struct {
 	usecase usecase.NoteUsecaseItf
-	tracer trace.Tracer
+	tracer  trace.Tracer
 }
 
 // NewNoteHandler creates a new NoteHandler instance
 func NewNoteHandler(usecase usecase.NoteUsecaseItf, tracer trace.Tracer) *NoteHandler {
 	return &NoteHandler{
 		usecase: usecase,
-		tracer: tracer,
+		tracer:  tracer,
 	}
 }
 
@@ -36,12 +36,7 @@ func (h *NoteHandler) parseID(c *gin.Context) (string, error) {
 	}
 
 	id := idStr
-	err := error(nil)
-	
-	if err != nil {
-		return "", errors.New("invalid id format")
-	}
-	
+
 	return id, nil
 }
 
@@ -61,17 +56,16 @@ func (h *NoteHandler) parseID(c *gin.Context) (string, error) {
 func (h *NoteHandler) CreateNote(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.CreateNote")
 	defer span.End()
-	
 
 	var req request.CreateNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		span.RecordError(err)
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request body",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request body",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
@@ -104,10 +98,9 @@ func (h *NoteHandler) CreateNote(c *gin.Context) {
 func (h *NoteHandler) GetNote(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.GetNote")
 	defer span.End()
-	
 
 	id, err := h.parseID(c)
 	if err != nil {
@@ -146,10 +139,9 @@ func (h *NoteHandler) GetNote(c *gin.Context) {
 func (h *NoteHandler) UpdateNote(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.UpdateNote")
 	defer span.End()
-	
 
 	id, err := h.parseID(c)
 	if err != nil {
@@ -164,8 +156,8 @@ func (h *NoteHandler) UpdateNote(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		span.RecordError(err)
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request body",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request body",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
@@ -205,10 +197,9 @@ func (h *NoteHandler) UpdateNote(c *gin.Context) {
 func (h *NoteHandler) DeleteNote(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.DeleteNote")
 	defer span.End()
-	
 
 	id, err := h.parseID(c)
 	if err != nil {
@@ -244,25 +235,24 @@ func (h *NoteHandler) DeleteNote(c *gin.Context) {
 func (h *NoteHandler) ListNotes(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.ListNotes")
 	defer span.End()
-	
 
 	// Parse query parameters into filter request
 	var req request.ListNoteRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request query param",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request query param",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
 	}
-	
+
 	// Get pagination
 	page, pageSize := req.GetPagination()
-	
+
 	// Convert to filters map
 	filters := req.ToFilters()
 
@@ -290,29 +280,28 @@ func (h *NoteHandler) ListNotes(c *gin.Context) {
 func (h *NoteHandler) CountNotes(c *gin.Context) {
 	ctx, span := h.tracer.Start(c.Request.Context(), "handler.Note.Count")
 	defer span.End()
-	
-	
+
 	// Parse query parameters into filter request
 	var req request.ListNoteRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request query param",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request query param",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
 	}
-	
+
 	// Convert to filters map
 	filters := req.ToFilters()
-	
+
 	// Call usecase
 	count, err := h.usecase.CountNotes(ctx, filters)
 	if err != nil {
 		response.HandleError(c, err)
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, response.Response{
 		Data: count,
 	})

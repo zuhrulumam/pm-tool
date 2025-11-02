@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -12,19 +13,20 @@ import (
 	"github.com/zuhrulumam/pm-tool/business/usecase"
 	"github.com/zuhrulumam/pm-tool/handler/api/request"
 	"github.com/zuhrulumam/pm-tool/handler/api/response"
+	contexthelper "github.com/zuhrulumam/pm-tool/pkg/context"
 )
 
 // ProjectHandler handles HTTP requests for Project
 type ProjectHandler struct {
 	usecase usecase.ProjectUsecaseItf
-	tracer trace.Tracer
+	tracer  trace.Tracer
 }
 
 // NewProjectHandler creates a new ProjectHandler instance
 func NewProjectHandler(usecase usecase.ProjectUsecaseItf, tracer trace.Tracer) *ProjectHandler {
 	return &ProjectHandler{
 		usecase: usecase,
-		tracer: tracer,
+		tracer:  tracer,
 	}
 }
 
@@ -36,12 +38,7 @@ func (h *ProjectHandler) parseID(c *gin.Context) (string, error) {
 	}
 
 	id := idStr
-	err := error(nil)
-	
-	if err != nil {
-		return "", errors.New("invalid id format")
-	}
-	
+
 	return id, nil
 }
 
@@ -61,25 +58,26 @@ func (h *ProjectHandler) parseID(c *gin.Context) (string, error) {
 func (h *ProjectHandler) CreateProject(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.CreateProject")
 	defer span.End()
-	
 
 	var req request.CreateProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		span.RecordError(err)
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request body",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request body",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
 	}
 
 	project := req.ToEntity()
+	project.UserId = contexthelper.MustGetUserID(ctx)
 
 	if err := h.usecase.CreateProject(ctx, project); err != nil {
+		fmt.Println("sini", err)
 		span.RecordError(err)
 		response.HandleError(c, err)
 		return
@@ -104,10 +102,9 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 func (h *ProjectHandler) GetProject(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.GetProject")
 	defer span.End()
-	
 
 	id, err := h.parseID(c)
 	if err != nil {
@@ -146,10 +143,9 @@ func (h *ProjectHandler) GetProject(c *gin.Context) {
 func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.UpdateProject")
 	defer span.End()
-	
 
 	id, err := h.parseID(c)
 	if err != nil {
@@ -164,8 +160,8 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		span.RecordError(err)
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request body",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request body",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
@@ -205,10 +201,9 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.DeleteProject")
 	defer span.End()
-	
 
 	id, err := h.parseID(c)
 	if err != nil {
@@ -244,25 +239,24 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 func (h *ProjectHandler) ListProjects(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.ListProjects")
 	defer span.End()
-	
 
 	// Parse query parameters into filter request
 	var req request.ListProjectRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request query param",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request query param",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
 	}
-	
+
 	// Get pagination
 	page, pageSize := req.GetPagination()
-	
+
 	// Convert to filters map
 	filters := req.ToFilters()
 
@@ -290,29 +284,28 @@ func (h *ProjectHandler) ListProjects(c *gin.Context) {
 func (h *ProjectHandler) CountProjects(c *gin.Context) {
 	ctx, span := h.tracer.Start(c.Request.Context(), "handler.Project.Count")
 	defer span.End()
-	
-	
+
 	// Parse query parameters into filter request
 	var req request.ListProjectRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request query param",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request query param",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
 	}
-	
+
 	// Convert to filters map
 	filters := req.ToFilters()
-	
+
 	// Call usecase
 	count, err := h.usecase.CountProjects(ctx, filters)
 	if err != nil {
 		response.HandleError(c, err)
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, response.Response{
 		Data: count,
 	})

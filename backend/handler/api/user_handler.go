@@ -17,14 +17,14 @@ import (
 // UserHandler handles HTTP requests for User
 type UserHandler struct {
 	usecase usecase.UserUsecaseItf
-	tracer trace.Tracer
+	tracer  trace.Tracer
 }
 
 // NewUserHandler creates a new UserHandler instance
 func NewUserHandler(usecase usecase.UserUsecaseItf, tracer trace.Tracer) *UserHandler {
 	return &UserHandler{
 		usecase: usecase,
-		tracer: tracer,
+		tracer:  tracer,
 	}
 }
 
@@ -36,12 +36,7 @@ func (h *UserHandler) parseID(c *gin.Context) (string, error) {
 	}
 
 	id := idStr
-	err := error(nil)
-	
-	if err != nil {
-		return "", errors.New("invalid id format")
-	}
-	
+
 	return id, nil
 }
 
@@ -61,17 +56,16 @@ func (h *UserHandler) parseID(c *gin.Context) (string, error) {
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.CreateUser")
 	defer span.End()
-	
 
 	var req request.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		span.RecordError(err)
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request body",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request body",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
@@ -104,10 +98,9 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 func (h *UserHandler) GetUser(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.GetUser")
 	defer span.End()
-	
 
 	id, err := h.parseID(c)
 	if err != nil {
@@ -146,10 +139,9 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.UpdateUser")
 	defer span.End()
-	
 
 	id, err := h.parseID(c)
 	if err != nil {
@@ -164,8 +156,8 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		span.RecordError(err)
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request body",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request body",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
@@ -205,10 +197,9 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.DeleteUser")
 	defer span.End()
-	
 
 	id, err := h.parseID(c)
 	if err != nil {
@@ -244,25 +235,24 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
-	
+
 	ctx, span := h.tracer.Start(ctx, "handler.ListUsers")
 	defer span.End()
-	
 
 	// Parse query parameters into filter request
 	var req request.ListUserRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request query param",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request query param",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
 	}
-	
+
 	// Get pagination
 	page, pageSize := req.GetPagination()
-	
+
 	// Convert to filters map
 	filters := req.ToFilters()
 
@@ -290,30 +280,62 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 func (h *UserHandler) CountUsers(c *gin.Context) {
 	ctx, span := h.tracer.Start(c.Request.Context(), "handler.User.Count")
 	defer span.End()
-	
-	
+
 	// Parse query parameters into filter request
 	var req request.ListUserRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Error: "Invalid request query param",
-			Code:  "INVALID_REQUEST",
+			Error:   "Invalid request query param",
+			Code:    "INVALID_REQUEST",
 			Details: err.Error(),
 		})
 		return
 	}
-	
+
 	// Convert to filters map
 	filters := req.ToFilters()
-	
+
 	// Call usecase
 	count, err := h.usecase.CountUsers(ctx, filters)
 	if err != nil {
 		response.HandleError(c, err)
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, response.Response{
 		Data: count,
 	})
+}
+
+type GoogleLoginRequest struct {
+	Credential string `json:"credential" binding:"required"`
+}
+
+func (h *UserHandler) GoogleCallback(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req GoogleLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	user, token, err := h.usecase.OAuthLoginWithCredential(ctx, req.Credential)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response.Response{
+		Data: map[string]interface{}{
+			"token": token,
+			"user":  user,
+		},
+	})
+	return
+}
+
+func (h *UserHandler) GoogleLoginHandler(c *gin.Context) {
+	url := h.usecase.GetGoogleOauthLogin(c.Request.Context(), "state-login")
+	c.Redirect(http.StatusTemporaryRedirect, url)
 }

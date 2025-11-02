@@ -2,13 +2,13 @@ package usecase
 
 import (
 	"context"
-	
-	"go.opentelemetry.io/otel/trace"
+
 	"github.com/zuhrulumam/pm-tool/pkg/errors"
-	
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/zuhrulumam/pm-tool/business/domain"
-	"github.com/zuhrulumam/pm-tool/config"
 	"github.com/zuhrulumam/pm-tool/business/entity"
+	"github.com/zuhrulumam/pm-tool/config"
 	"github.com/zuhrulumam/pm-tool/pkg/transaction"
 )
 
@@ -20,14 +20,17 @@ type UserUsecaseItf interface {
 	DeleteUser(ctx context.Context, id string) error
 	CountUsers(ctx context.Context, filters map[string]interface{}) (int64, error)
 	CreateUserBatch(ctx context.Context, entities []*entity.User) error
+
+	OAuthLoginWithCredential(ctx context.Context, credential string) (*entity.User, string, error)
+	GetGoogleOauthLogin(ctx context.Context, state string) string
 }
 
 // UserUsecase handles business logic and transaction orchestration for User
 type userUsecase struct {
 	userDomain domain.UserDomainItf
-	txMgr   transaction.TransactionManager
-	tracer trace.Tracer
-	Config *config.Config
+	txMgr      transaction.TransactionManager
+	tracer     trace.Tracer
+	Config     *config.Config
 }
 
 // NewUserUsecase creates a new UserUsecase instance
@@ -39,9 +42,9 @@ func NewUserUsecase(
 ) UserUsecaseItf {
 	return &userUsecase{
 		userDomain: userDomain,
-		txMgr:   txMgr,
-		Config: conf,
-		tracer: tracer,
+		txMgr:      txMgr,
+		Config:     conf,
+		tracer:     tracer,
 	}
 }
 
@@ -49,8 +52,7 @@ func NewUserUsecase(
 func (uc *userUsecase) CreateUser(ctx context.Context, entity *entity.User) error {
 	ctx, span := uc.tracer.Start(ctx, "usecase.CreateUser")
 	defer span.End()
-	
-	
+
 	// Execute within transaction
 	return uc.txMgr.WithTransaction(ctx, func(txCtx context.Context) error {
 		// Domain layer handles: DB operations, Redis cache, Queue events, HTTP calls
@@ -63,8 +65,7 @@ func (uc *userUsecase) CreateUser(ctx context.Context, entity *entity.User) erro
 func (uc *userUsecase) GetUser(ctx context.Context, id string) (*entity.User, error) {
 	ctx, span := uc.tracer.Start(ctx, "usecase.GetUser")
 	defer span.End()
-	
-	
+
 	return uc.userDomain.GetByID(ctx, id)
 }
 
@@ -72,8 +73,7 @@ func (uc *userUsecase) GetUser(ctx context.Context, id string) (*entity.User, er
 func (uc *userUsecase) ListUsers(ctx context.Context, filters map[string]interface{}, page, pageSize int) ([]*entity.User, int64, error) {
 	ctx, span := uc.tracer.Start(ctx, "usecase.ListUsers")
 	defer span.End()
-	
-	
+
 	return uc.userDomain.List(ctx, filters, page, pageSize)
 }
 
@@ -81,8 +81,7 @@ func (uc *userUsecase) ListUsers(ctx context.Context, filters map[string]interfa
 func (uc *userUsecase) UpdateUser(ctx context.Context, id string, entity *entity.User) error {
 	ctx, span := uc.tracer.Start(ctx, "usecase.UpdateUser")
 	defer span.End()
-	
-	
+
 	// Execute within transaction
 	return uc.txMgr.WithTransaction(ctx, func(txCtx context.Context) error {
 		return uc.userDomain.Update(txCtx, id, entity)
@@ -93,8 +92,7 @@ func (uc *userUsecase) UpdateUser(ctx context.Context, id string, entity *entity
 func (uc *userUsecase) DeleteUser(ctx context.Context, id string) error {
 	ctx, span := uc.tracer.Start(ctx, "usecase.DeleteUser")
 	defer span.End()
-	
-	
+
 	// Execute within transaction
 	return uc.txMgr.WithTransaction(ctx, func(txCtx context.Context) error {
 		return uc.userDomain.Delete(txCtx, id)
@@ -105,8 +103,7 @@ func (uc *userUsecase) DeleteUser(ctx context.Context, id string) error {
 func (uc *userUsecase) CountUsers(ctx context.Context, filters map[string]interface{}) (int64, error) {
 	ctx, span := uc.tracer.Start(ctx, "usecase.CountUsers")
 	defer span.End()
-	
-	
+
 	return uc.userDomain.Count(ctx, filters)
 }
 
@@ -115,12 +112,11 @@ func (uc *userUsecase) CountUsers(ctx context.Context, filters map[string]interf
 func (uc *userUsecase) CreateUserBatch(ctx context.Context, entities []*entity.User) error {
 	ctx, span := uc.tracer.Start(ctx, "usecase.CreateUserBatch")
 	defer span.End()
-	
-	
+
 	if len(entities) == 0 {
 		return errors.BadRequest("no entities to create")
 	}
-	
+
 	// All creates in single transaction
 	return uc.txMgr.WithTransaction(ctx, func(txCtx context.Context) error {
 		for _, entity := range entities {
@@ -131,4 +127,19 @@ func (uc *userUsecase) CreateUserBatch(ctx context.Context, entities []*entity.U
 		}
 		return nil
 	})
+}
+
+func (uc *userUsecase) OAuthLoginWithCredential(ctx context.Context, credential string) (*entity.User, string, error) {
+	ctx, span := uc.tracer.Start(ctx, "usecase.OAuthLoginWithCredential")
+	defer span.End()
+
+	return uc.userDomain.OAuthLoginWithCredential(ctx, credential)
+}
+
+// GetGoogleOauthLogin returns the total count of Users (no transaction needed)
+func (uc *userUsecase) GetGoogleOauthLogin(ctx context.Context, state string) string {
+	ctx, span := uc.tracer.Start(ctx, "usecase.GetGoogleOauthLogin")
+	defer span.End()
+
+	return uc.userDomain.GetGoogleLoginURL(ctx, state)
 }

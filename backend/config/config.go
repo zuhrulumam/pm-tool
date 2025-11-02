@@ -47,7 +47,7 @@ func Load() (*Config, error) {
 		},
 		JWT: JWTConfig{
 			Secret:     getEnvOrDefault("JWT_SECRET", "your-secret-key-change-this"),
-			Expiration: getEnvOrDefault("JWT_EXPIRATION", "24h"),
+			Expiration: time.Duration(getEnvAsIntOrDefault("JWT_EXPIRATION", 24)) * time.Hour,
 		},
 		Log: LogConfig{
 			Level:  getEnvOrDefault("LOG_LEVEL", "debug"),

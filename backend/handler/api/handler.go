@@ -15,21 +15,21 @@ import (
 
 // Handlers holds all HTTP handler instances
 type Handlers struct {
-	User *UserHandler
+	User    *UserHandler
 	Project *ProjectHandler
-	Note *NoteHandler
+	Note    *NoteHandler
 
-Config *config.Config
+	Config *config.Config
 }
 
 // NewHandlers initializes all handlers from usecases
 func NewHandlers(usecases *usecase.Usecases, conf *config.Config, tracer trace.Tracer) *Handlers {
 	return &Handlers{
-		User: NewUserHandler(usecases.User, tracer),
+		User:    NewUserHandler(usecases.User, tracer),
 		Project: NewProjectHandler(usecases.Project, tracer),
-		Note: NewNoteHandler(usecases.Note, tracer),
+		Note:    NewNoteHandler(usecases.Note, tracer),
 
-	Config: conf,	}
+		Config: conf}
 }
 
 // SetupRoutes configures all HTTP routes with middleware
@@ -37,11 +37,12 @@ func (h *Handlers) SetupRoutes(engine *gin.Engine) {
 
 	// Health check endpoint (no auth required)
 	engine.GET("/health", h.healthCheck)
+	engine.GET("/api/v1/auth/google", h.User.GoogleLoginHandler)
+	engine.POST("/api/v1/auth/google/callback", h.User.GoogleCallback)
 
 	// API v1 group with auth
 	v1 := engine.Group("/api/v1")
 	v1.Use(middleware.AuthMiddleware(h.Config.JWT.Secret)) // Apply auth to all API routes
-	
 
 	// User routes
 	userRoutes := v1.Group("/users")

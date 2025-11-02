@@ -1,9 +1,10 @@
-
-	package oauthhelper
+package oauthhelper
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"time"
 
 	apperr "github.com/zuhrulumam/pm-tool/pkg/errors"
@@ -76,4 +77,47 @@ func (g *GoogleProvider) GetUserInfo(ctx context.Context, code, state string) (U
 	}, nil
 }
 
-	
+func (g *GoogleProvider) VerifyIDToken(ctx context.Context, idToken string) (UserInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Call Google's tokeninfo endpoint to verify and get user info
+	url := fmt.Sprintf("https://oauth2.googleapis.com/tokeninfo?id_token=%s", idToken)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return UserInfo{}, apperr.Propagate(err, apperr.CodeExternalAPI, "failed to verify google token", 500)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return UserInfo{}, apperr.Propagate(
+			fmt.Errorf("invalid token, status: %d", resp.StatusCode),
+			apperr.CodeExternalAPI,
+			"google token verification failed",
+			401,
+		)
+	}
+
+	var tokenInfo struct {
+		Sub           string `json:"sub"` // Google user ID
+		Email         string `json:"email"`
+		EmailVerified string `json:"email_verified"` // It's a string "true"/"false"
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
+		GivenName     string `json:"given_name"`
+		FamilyName    string `json:"family_name"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&tokenInfo); err != nil {
+		return UserInfo{}, apperr.Propagate(err, apperr.CodeExternalAPI, "failed to decode token info", 500)
+	}
+
+	return UserInfo{
+		ID:       tokenInfo.Sub,
+		Email:    tokenInfo.Email,
+		Name:     tokenInfo.Name,
+		Picture:  tokenInfo.Picture,
+		Provider: ProviderGoogle,
+	}, nil
+}

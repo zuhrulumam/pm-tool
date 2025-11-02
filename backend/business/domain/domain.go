@@ -3,29 +3,29 @@ package domain
 import (
 	"github.com/zuhrulumam/pm-tool/config"
 	"github.com/zuhrulumam/pm-tool/infra/redis"
+	"github.com/zuhrulumam/pm-tool/pkg/db"
 	"github.com/zuhrulumam/pm-tool/pkg/httpclient"
 	oauthhelper "github.com/zuhrulumam/pm-tool/pkg/oauth"
 	"go.opentelemetry.io/otel/trace"
-	"github.com/zuhrulumam/pm-tool/pkg/db"
 )
 
 // Domains holds all domain instances
 // Schema: public.
 type Domains struct {
-	User UserDomainItf
+	User    UserDomainItf
 	Project ProjectDomainItf
-	Note NoteDomainItf
+	Note    NoteDomainItf
 }
 
 // DomainDependencies contains dependencies needed to initialize domains
 type DomainDependencies struct {
-	DB           *db.DB  // Can be single DB or use Leader/Follower pattern
+	DB           *db.DB // Can be single DB or use Leader/Follower pattern
 	Redis        *redis.Client
 	HTTP         *httpclient.Client
 	Tracer       trace.Tracer
 	Oauth        oauthhelper.Oauth
 	SchemaPrefix string
-	Config *config.Config
+	Config       *config.Config
 }
 
 // NewDomains creates and initializes all domains with dependencies
@@ -39,6 +39,7 @@ func NewDomains(deps DomainDependencies) *Domains {
 			deps.HTTP,
 			deps.Tracer,
 			deps.SchemaPrefix,
+			deps.Oauth,
 		),
 		Project: NewProjectDomain(
 			deps.DB,

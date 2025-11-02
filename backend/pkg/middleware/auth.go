@@ -1,12 +1,14 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	contexthelper "github.com/zuhrulumam/pm-tool/pkg/context"
 )
 
 // JWTClaims represents JWT claims structure
@@ -58,6 +60,12 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 		// Set user info in context
 		c.Set("user_id", claims.UserID)
 		c.Set("email", claims.Email)
+
+		ctx := c.Request.Context()
+		ctx = context.WithValue(ctx, contexthelper.UserIDKey, claims.UserID)
+		ctx = context.WithValue(ctx, contexthelper.EmailKey, claims.Email)
+		c.Request = c.Request.WithContext(ctx)
+
 		c.Next()
 	}
 }
