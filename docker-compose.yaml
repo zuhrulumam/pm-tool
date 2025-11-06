@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: pm_tool
     ports:
-      - "8432:5432"
+      - "8433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     networks:
@@ -65,6 +65,8 @@ services:
       # Override specific variables for Docker environment
       - DB_HOST=db
       - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4318
