@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: pm-tool-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pm_tool
+    ports:
+      - "8432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - pm-tool-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: pm-tool-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - pm-tool-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Jaeger Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: pm-tool-jaeger
+    ports:
+      - "6831:6831/udp"
+      - "16686:16686"
+      - "14268:14268"
+      - "4318:4318"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - pm-tool-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pm-tool-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_NAME=pm-tool
+      - APP_ENV=development
+      - APP_PORT=8080
+      - APP_DEBUG=true
+      - DB_TYPE=postgres
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=pm_tool
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_SSL_MODE=disable
+      - DB_MAX_IDLE_CONNS=10
+      - DB_MAX_OPEN_CONNS=100
+      - DB_CONN_MAX_LIFETIME=3600
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      - TELEMETRY_ENABLED=true
+      - TELEMETRY_PROVIDER=opentelemetry
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4318
+      - OTEL_SERVICE_NAME=pm-tool
+      - LOG_LEVEL=debug
+      - LOG_FORMAT=json
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:80
+      - CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS
+      - CORS_ALLOWED_HEADERS=Content-Type,Authorization
+      - JWT_SECRET=your-secret-key-change-this-in-production
+      - JWT_EXPIRATION=24h
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_REQUESTS_PER_SECOND=100
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+    networks:
+      - pm-tool-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pm-tool-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - pm-tool-network
+    environment:
+      - VITE_API_URL=http://localhost:8080
+
+volumes:
+  db_data:
+  redis_data:
+
+networks:
+  pm-tool-network:
+    driver: bridge
