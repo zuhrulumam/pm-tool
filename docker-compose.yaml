@@ -59,38 +59,16 @@ services:
     container_name: pm-tool-backend
     ports:
       - "8080:8080"
+    env_file:
+      - ./backend/.env
     environment:
-      - APP_NAME=pm-tool
-      - APP_ENV=development
-      - APP_PORT=8080
-      - APP_DEBUG=true
-      - DB_TYPE=postgres
+      # Override specific variables for Docker environment
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_NAME=pm_tool
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_SSL_MODE=disable
-      - DB_MAX_IDLE_CONNS=10
-      - DB_MAX_OPEN_CONNS=100
-      - DB_CONN_MAX_LIFETIME=3600
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=
-      - REDIS_DB=0
-      - TELEMETRY_ENABLED=true
-      - TELEMETRY_PROVIDER=opentelemetry
       - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4318
-      - OTEL_SERVICE_NAME=pm-tool
-      - LOG_LEVEL=debug
-      - LOG_FORMAT=json
       - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:80
-      - CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS
-      - CORS_ALLOWED_HEADERS=Content-Type,Authorization
-      - JWT_SECRET=your-secret-key-change-this-in-production
-      - JWT_EXPIRATION=24h
-      - RATE_LIMIT_ENABLED=true
-      - RATE_LIMIT_REQUESTS_PER_SECOND=100
     depends_on:
       db:
         condition: service_healthy
@@ -120,8 +98,6 @@ services:
         condition: service_healthy
     networks:
       - pm-tool-network
-    environment:
-      - VITE_API_URL=http://localhost:8080
 
 volumes:
   db_data:

@@ -9,6 +9,10 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci
 
+# Copy environment file if exists, otherwise use example
+COPY .env* ./
+RUN if [ ! -f .env ]; then cp .env.example .env; fi
+
 # Copy source code
 COPY . .
 
