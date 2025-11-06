@@ -18,7 +18,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 # Final stage
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+# Install runtime dependencies
+RUN apk --no-cache add ca-certificates netcat-openbsd
 
 WORKDIR /root/
 
@@ -26,6 +27,14 @@ WORKDIR /root/
 COPY --from=builder /app/main .
 COPY --from=builder /app/.env.example .env
 
+# Copy migration files
+COPY --from=builder /app/migration ./migration
+
+# Copy entrypoint script
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
+
 EXPOSE 8080
 
-CMD ["./main", "serve"]
+# Use entrypoint script to run migrations before starting server
+ENTRYPOINT ["./entrypoint.sh"]
